@@ -1,0 +1,4 @@
+SkylarkLabs-Autotraining/
+*__pycache__*
+tmp_notebooks
+*.ipynb_checkpoints*
