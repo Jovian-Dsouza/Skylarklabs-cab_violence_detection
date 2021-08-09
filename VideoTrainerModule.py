@@ -84,16 +84,16 @@ class ViolenceDetectionModule(TrainerModule):
         for name, param in self.model.pretrained_block.named_parameters():
             param.requires_grad = False
             # print(f'Freezing {name}')
-        print('Freezing layers')
+        print('Freezing Pretrained layers')
         
     def on_epoch_start(self):
-        # pass
+        pass
         # unfreezing params from pretrained_block at 5th epoch
-        if self.trainer.current_epoch == 5:
-            for name, param in self.model.pretrained_block.named_parameters():
-                param.requires_grad_()
-                # print(f'Unfreezing {name}')
-            print('Unfreezing layers')
+        # if self.trainer.current_epoch == 5:
+        #     for name, param in self.model.pretrained_block.named_parameters():
+        #         param.requires_grad_()
+        #         # print(f'Unfreezing {name}')
+        #     print('Unfreezing layers')
 
     def configure_optimizers(self):
         if self.model.hparams.optimizer == 'sgd':

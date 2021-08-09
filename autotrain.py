@@ -31,23 +31,23 @@ class SplitDataModule():
 
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
-                                 batch_size=16,  
+                                 batch_size=16,
+                                 num_workers=0,  
                                  pin_memory=True)
 print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 16)
 
 autotrainer = AutoTrainer(
-    project_name = 'cab_violence_detection-Test-test',
+    project_name = 'cab_violence_detection-Test',
     trainer_module = ViolenceDetectionModule,
     datamodule = datamodule,
-    # dataloaders = [datamodule.train_dataloader(), datamodule.val_dataloader(), datamodule.test_dataloader()],
     models = [
         {
             'model': model1.VideoModel,
             'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
-            'hyperparameters': {'method': 'grid', 'lr': [1e-3],
-                                'optimizer': ['adam']},
-            'description': 'Pretrained r2plus1d-18 with Conv2Plus1D (~10MB)',
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-3, 4e-3],
+                                'optimizer': ['adam', 'sgd', 'adamax']},
+            'description': 'Pretrained r2plus1d-18 with Conv2Plus1D',
         },
     ],
     checkpoint = {'filename': '{epoch}-{val_acc:.4f}', 'monitor': 'val_f1', 'mode': 'max'},
@@ -56,11 +56,26 @@ autotrainer = AutoTrainer(
     gpus = -1,
     max_epochs = 1,
     datasets_limits = split_data.cal(1.0, 1.0, 1.0),
-    # callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")],
+
+    #overfit_batches = 1,
+    #overfit_epochs = 1,
+
+    callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")],
     stages = {
-        'stage1': {'precision': 16, 'datasets_limits': split_data.cal(0.1, 0.1, 0.1)},
-        'stage2': {'precision': 16, 'datasets_limits': split_data.cal(0.1, 0.1, 0.1)},
-        'stage3': {},
+        'stage1': {
+                    'precision': 16, 
+                    'datasets_limits': split_data.cal(0.8, 1.0, 1.0),
+                    'max_epochs': 5,
+                    },
+        'stage2': {
+                    'precision': 16,
+                    'datasets_limits': split_data.cal(0.5, 0.8, 1.0),
+                    'max_epochs': 15,
+                  },
+        'stage3': {
+                    'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")], 
+                    'max_epochs': 80,
+                },
     },
     restart = True, # restarting is supported now
 )
