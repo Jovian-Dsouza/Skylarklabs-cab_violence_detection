@@ -59,8 +59,6 @@ autotrainer = AutoTrainer(
 
     #overfit_batches = 1,
     #overfit_epochs = 1,
-
-    callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")],
     stages = {
         'stage1': {
                     'precision': 16, 
