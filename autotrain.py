@@ -19,7 +19,6 @@ import models.model2 as model2
 from VideoTrainerModule import *
 from callbacks import *
 
-
 """## Training configuration"""
 
 class SplitDataModule():
@@ -33,7 +32,7 @@ class SplitDataModule():
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
                                  batch_size=16,
-                                 num_workers=0,  
+                                #  num_workers=0,  
                                  pin_memory=True)
 print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 16)
@@ -46,8 +45,8 @@ autotrainer = AutoTrainer(
         {
             'model': model1.VideoModel,
             'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
-            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-3, 4e-3],
-                                'optimizer': ['adam', 'sgd', 'adamax']},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 4e-4],
+                                'optimizer': ['adam']},
             'description': 'Pretrained r2plus1d-18 with Conv2Plus1D',
         },
     ],
@@ -64,7 +63,7 @@ autotrainer = AutoTrainer(
         'stage1': {
                     'precision': 16, 
                     'datasets_limits': split_data.cal(0.8, 1.0, 1.0),
-                    'max_epochs': 5,
+                    'max_epochs': 1,
                     },
         'stage2': {
                     'precision': 16,
