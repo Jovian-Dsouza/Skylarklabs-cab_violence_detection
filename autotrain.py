@@ -31,8 +31,7 @@ class SplitDataModule():
 
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
-                                 batch_size=16,
-                                 num_workers=0,  
+                                 batch_size=16,  
                                  pin_memory=True)
 print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 16)
@@ -40,15 +39,14 @@ split_data = SplitDataModule((812, 197, 58), batch_size = 16)
 autotrainer = AutoTrainer(
     project_name = 'cab_violence_detection-Test-test',
     trainer_module = ViolenceDetectionModule,
-    
     datamodule = datamodule,
     # dataloaders = [datamodule.train_dataloader(), datamodule.val_dataloader(), datamodule.test_dataloader()],
     models = [
         {
             'model': model1.VideoModel,
             'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
-            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-3, 4e-3],
-                                'optimizer': ['adam', 'sgd', 'adamax']},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3],
+                                'optimizer': ['adam']},
             'description': 'Pretrained r2plus1d-18 with Conv2Plus1D (~10MB)',
         },
     ],
@@ -58,13 +56,13 @@ autotrainer = AutoTrainer(
     gpus = -1,
     max_epochs = 1,
     datasets_limits = split_data.cal(1.0, 1.0, 1.0),
-    # callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=1, mode="min")],
+    # callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")],
     stages = {
-        'stage1': {'precision': 16, 'datasets_limits': split_data.cal(0.8, 1.0, 1.0)},
-        'stage2': {'precision': 16, 'datasets_limits': split_data.cal(0.5, 0.8, 1.0)},
+        'stage1': {'precision': 16, 'datasets_limits': split_data.cal(0.1, 0.1, 0.1)},
+        'stage2': {'precision': 16, 'datasets_limits': split_data.cal(0.1, 0.1, 0.1)},
         'stage3': {},
     },
-    restart = False, # restarting is supported now
+    restart = True, # restarting is supported now
 )
 
 autotrainer.start()

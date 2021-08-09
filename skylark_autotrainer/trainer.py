@@ -11,7 +11,7 @@ from .callbacks import ArtifactModelCheckpoint
 import os
 import dill
 import wandb
-from copy import deepcopy
+from copy import deepcopy, copy
 from typing import Dict, List, Tuple, Union
 from termcolor import colored
 from pprint import pprint
@@ -123,7 +123,14 @@ class AutoTrainer:
             return len(TITLE)
     
     def _save_buffer(self, last_stage: int) -> None:
-        buffer = deepcopy(vars(self))
+        _trainer_module = self.trainer_module
+        _buffer = self.buffer
+        _datamodule = self.datamodule
+        _callbacks = self.callbacks
+        _models = self.models
+        _stages = self.stages
+
+        buffer = vars(self)
         buffer.pop('trainer_module')
         for key, value in buffer['buffer'].items():
             buffer[key] = value
@@ -131,14 +138,24 @@ class AutoTrainer:
         buffer.pop('buffer')
         buffer.pop('datamodule')
         buffer.pop('callbacks')
+        buffer = deepcopy(buffer)
         buffer['last_stage'] = last_stage
+
         for model in buffer['models']:
             if 'model_class' in model:
                 del model['model_class']
         for stage in buffer['stages'].values():
             if 'callbacks' in stage:
                 del stage['callbacks']
+
         torch.save(buffer, self.path, pickle_module = dill)
+
+        self.trainer_module = _trainer_module
+        self.buffer = _buffer
+        self.datamodule = _datamodule
+        self.callbacks = _callbacks
+        self.models = _models
+        self.stages = _stages
 
     def _initiate_stage1(self) -> None:
         self._read_buffer()
