@@ -5,7 +5,7 @@ class UnfreezingOnPlateau(EarlyStopping):
         # override this to disable early stopping at the end of val loop
         pass
 
-    def on_train_end(self, trainer, pl_module):
+    def on_train_epoch_end(self, trainer, pl_module):
         # instead, do it at the end of training loop
         self._run_unfreeze(trainer, pl_module)
 

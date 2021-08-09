@@ -19,6 +19,7 @@ import models.model2 as model2
 from VideoTrainerModule import *
 from callbacks import *
 
+
 """## Training configuration"""
 
 class SplitDataModule():
@@ -71,7 +72,7 @@ autotrainer = AutoTrainer(
                     'max_epochs': 15,
                   },
         'stage3': {
-                    'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=5, mode="min")], 
+                    'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=2, mode="min")], 
                     'max_epochs': 80,
                 },
     },

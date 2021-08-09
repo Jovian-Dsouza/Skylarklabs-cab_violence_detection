@@ -19,5 +19,5 @@
 
 ## Start Training
 ```bash
-!python autotrain.py
+!python -W ignore autotrain.py
 ```
