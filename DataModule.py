@@ -73,7 +73,7 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
         self._PIN_MEMORY = pin_memory
 
         if num_workers is None:
-            self._NUM_WORKERS = 0
+            self._NUM_WORKERS = os.cpu_count()-1
 
         # Transform parameters
         # mean = (0.45, 0.45, 0.45)
