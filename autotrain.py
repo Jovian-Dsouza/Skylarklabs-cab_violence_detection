@@ -31,7 +31,8 @@ class SplitDataModule():
 
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
-                                 batch_size=16,  
+                                 batch_size=16,
+                                 num_workers=0,  
                                  pin_memory=True)
 print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 16)
