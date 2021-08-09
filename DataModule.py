@@ -108,7 +108,6 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
                                 Resize((crop, crop)),
                                 Lambda(lambda x: x / 255.0),
                                 Normalize(mean, std),
-                                RandomHorizontalFlip(p=0.5),     
                             ]
                             ),
                         ),
