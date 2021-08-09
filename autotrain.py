@@ -40,7 +40,8 @@ autotrainer = AutoTrainer(
     project_name = 'cab_violence_detection-Test-test',
     trainer_module = ViolenceDetectionModule,
     
-    dataloaders = [datamodule.train_dataloader(), datamodule.val_dataloader(), datamodule.test_dataloader()],
+    datamodule = datamodule,
+    # dataloaders = [datamodule.train_dataloader(), datamodule.val_dataloader(), datamodule.test_dataloader()],
     models = [
         {
             'model': model1.VideoModel,
@@ -54,15 +55,15 @@ autotrainer = AutoTrainer(
     evaluation_metric = {'monitor': 'test_f1', 'mode': 'max'},
     precision = 32,
     gpus = -1,
-    max_epochs = 15,
-    datasets_limits = (1.0, 1.0, 1.0),
+    max_epochs = 1,
+    datasets_limits = split_data.cal(1.0, 1.0, 1.0),
     # callbacks = [UnfreezingOnPlateau(monitor="train_loss", patience=1, mode="min")],
     stages = {
         'stage1': {'precision': 16, 'datasets_limits': split_data.cal(0.8, 1.0, 1.0)},
         'stage2': {'precision': 16, 'datasets_limits': split_data.cal(0.5, 0.8, 1.0)},
         'stage3': {},
     },
-    restart = True, # restarting is supported now
+    restart = False, # restarting is supported now
 )
 
 autotrainer.start()

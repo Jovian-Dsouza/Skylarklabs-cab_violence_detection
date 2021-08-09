@@ -64,6 +64,7 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
         num_workers -  Number of parallel processes fetching data
         pin_memory 
         '''
+        super().__init__()
         self._DATA_PATH = data_path
         self._CLIP_DURATION = clip_duration  
         self._BATCH_SIZE = batch_size
