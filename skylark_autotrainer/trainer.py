@@ -14,6 +14,7 @@ import wandb
 from copy import deepcopy
 from typing import Dict, List, Tuple, Union
 from termcolor import colored
+from pprint import pprint
 
 class AutoTrainer:
     def __init__(
@@ -21,7 +22,6 @@ class AutoTrainer:
         project_name: str,
         trainer_module: LightningModule,
         models: List,
-        dataloaders: List[DataLoader] = None,
         datamodule: LightningDataModule = None,
         checkpoint: Dict = None,
         max_epochs: int = None,
@@ -38,25 +38,16 @@ class AutoTrainer:
         **kwargs
     ) -> None:
 
-        assert None in [dataloaders, datamodule], f'\n\nYou must pass either dataloaders or datamodule, not both.\n'
-
-        if dataloaders:
-            assert len(dataloaders) == 3, f'\n\nYou must pass dataloaders for training, validation and testing, got only "{len(dataloaders)}" dataloaders.\n'
-        else:
-            assert hasattr(datamodule, 'train_dataloader'), f'\n\nYou must define `train_dataloader` in your datamodule.\n'
-            assert hasattr(datamodule, 'val_dataloader'), f'\n\nYou must define `val_dataloader` in your datamodule.\n'
-            assert hasattr(datamodule, 'test_dataloader'), f'\n\nYou must define `test_dataloader` in your datamodule.\n'
+        assert hasattr(datamodule, 'train_dataloader'), f'\n\nYou must define `train_dataloader` in your datamodule.\n'
+        assert hasattr(datamodule, 'val_dataloader'), f'\n\nYou must define `val_dataloader` in your datamodule.\n'
+        assert hasattr(datamodule, 'test_dataloader'), f'\n\nYou must define `test_dataloader` in your datamodule.\n'
             
-            datamodule.prepare_data()
-            datamodule.setup()
-            dataloaders = [datamodule.train_dataloader(), datamodule.val_dataloader(), datamodule.test_dataloader()]
-        
         seed_everything(seed)
 
         os.makedirs(os.path.join(project_name), exist_ok = True)
         self.path = os.path.join(project_name, 'autotrainer.ckpt')
         self.trainer_module = trainer_module
-        self.dataloaders = dataloaders
+        self.datamodule = datamodule
         self.project_name = project_name
 
         self.gpus = gpus
@@ -138,7 +129,7 @@ class AutoTrainer:
             buffer[key] = value
         
         buffer.pop('buffer')
-        buffer.pop('dataloaders')
+        buffer.pop('datamodule')
         buffer.pop('callbacks')
         buffer['last_stage'] = last_stage
         for model in buffer['models']:
@@ -154,7 +145,7 @@ class AutoTrainer:
 
         if self.buffer['last_stage'] < 1:
             datasets_limits, max_epochs, min_epochs, precision, gpus, callbacks = self._get_stage_variables('stage1')
-            assert len(datasets_limits) == len(self.dataloaders), f'\n\nNumber of datasets_limits [{len(datasets_limits)}] differ than number of dataloaders [{len(self.dataloaders)}].\n'
+            assert len(datasets_limits) == 3, f'\n\nYou must provide 3 dataset limits.\n'
 
             monitor = self.evaluation_metric['monitor']
             assert 'test' in monitor, f'\n\nStage evaluation must be done for metric obtained from testing dataloader, but got "{monitor}".\n'
@@ -192,7 +183,7 @@ class AutoTrainer:
                     weights_summary = None,
                     precision = precision,
                 )
-                dev_trainer.fit(self.trainer_module(nn_model), self.dataloaders[0], self.dataloaders[1])
+                dev_trainer.fit(self.trainer_module(nn_model), self.datamodule)
                 
                 self._print_heading('Performing Overfitting Test', idx = 1)
                 overfit_trainer = Trainer(
@@ -205,7 +196,7 @@ class AutoTrainer:
                     terminate_on_nan = True,
                     weights_summary = None,
                 )
-                overfit_trainer.fit(self.trainer_module(nn_model), self.dataloaders[0], self.dataloaders[1])
+                overfit_trainer.fit(self.trainer_module(nn_model), self.datamodule)
 
                 self._print_heading('Starting Training', idx = 1)
                 wandb_logger = CustomWandbLogger(
@@ -237,10 +228,10 @@ class AutoTrainer:
                 )
                 
                 lightning_module = self.trainer_module(nn_model)
-                lightning_trainer.fit(lightning_module, self.dataloaders[0], self.dataloaders[1])
+                lightning_trainer.fit(lightning_module, self.datamodule)
 
-                reloaded_model = type(lightning_module).load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
-                self.stage1_results[model_name] = lightning_trainer.test(reloaded_model, self.dataloaders[0])
+                reloaded_model = self.trainer_module.load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
+                self.stage1_results[model_name] = lightning_trainer.test(reloaded_model, self.datamodule)
 
                 if self.wandb_logging:
                     wandb_logger.experiment.finish()
@@ -286,7 +277,7 @@ class AutoTrainer:
 
         if self.buffer['last_stage'] < 2 or not self.buffer['best_stage2_config']:
             datasets_limits, max_epochs, min_epochs, precision, gpus, callbacks = self._get_stage_variables('stage2')
-            assert len(datasets_limits) == len(self.dataloaders), f'\n\nNumber of datasets_limits [{len(datasets_limits)}] differ than number of dataloaders [{len(self.dataloaders)}].\n'
+            assert len(datasets_limits) == 3, f'\n\nYou must provide 3 dataset limits.\n'
 
 
             for model in self.models:
@@ -378,10 +369,10 @@ class AutoTrainer:
                 )
                 
                 lightning_module = self.trainer_module(nn_model)
-                lightning_trainer.fit(lightning_module, self.dataloaders[0], self.dataloaders[1])
+                lightning_trainer.fit(lightning_module, self.datamodule)
 
-                reloaded_model = type(lightning_module).load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
-                self.stage2_results.append((hyperparam_config, lightning_trainer.test(reloaded_model, self.dataloaders[0]), checkpoint_callback.best_model_path))
+                reloaded_model = self.trainer_module.load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
+                self.stage2_results.append((hyperparam_config, lightning_trainer.test(reloaded_model, self.datamodule), checkpoint_callback.best_model_path))
 
                 if self.wandb_logging:
                     wandb_logger.experiment.finish()
@@ -392,7 +383,6 @@ class AutoTrainer:
                 del reloaded_model
             
             wandb.agent(sweep_id, _sweep_train_function)
-            wandb.finish()
             
             self._finalize_stage2()
         else:
@@ -431,13 +421,14 @@ class AutoTrainer:
 
         if self.buffer['last_stage'] < 3:
             datasets_limits, max_epochs, min_epochs, precision, gpus, callbacks = self._get_stage_variables('stage3')
-            assert len(datasets_limits) == len(self.dataloaders), f'\n\nNumber of datasets_limits [{len(datasets_limits)}] differ than number of dataloaders [{len(self.dataloaders)}].\n'
+            assert len(datasets_limits) == 3, f'\n\nYou must provide 3 dataset limits.\n'
 
             monitor = self.evaluation_metric['monitor']
             assert 'test' in monitor, f'\n\nStage evaluation must be done for metric obtained from testing dataloader, but got "{monitor}".\n'
 
             self.best_stage3_test_score = 0.0
             self.best_stage3_val_score = 0.0
+            self.best_stage3_path = None
 
             for model in self.models:
                 if self.buffer['best_stage1_model'] == model['model_class_name']:
@@ -499,11 +490,13 @@ class AutoTrainer:
             )
             
             lightning_module = self.trainer_module.load_from_checkpoint(self.buffer['best_stage2_model_path'], model = nn_model)
-            lightning_trainer.fit(lightning_module, self.dataloaders[0], self.dataloaders[1])
+            lightning_trainer.fit(lightning_module, self.datamodule)
+
+            self.best_stage3_path = checkpoint_callback.best_model_path
             self.best_stage3_val_score = {checkpoint_callback.monitor: checkpoint_callback.best_model_score.item()}
 
-            reloaded_model = type(lightning_module).load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
-            self.best_stage3_test_score = {self.evaluation_metric['monitor']: lightning_trainer.test(reloaded_model, self.dataloaders[0])[0][self.evaluation_metric['monitor']]}
+            reloaded_model = self.trainer_module.load_from_checkpoint(checkpoint_callback.best_model_path, model = nn_model)
+            self.best_stage3_test_score = {self.evaluation_metric['monitor']: lightning_trainer.test(reloaded_model, self.datamodule)[0][self.evaluation_metric['monitor']]}
 
             if self.wandb_logging:
                 wandb_logger.experiment.finish()
@@ -521,6 +514,8 @@ class AutoTrainer:
             print(colored(f'Best Testing Score     -> {self.buffer["best_stage3_test_score"]}', 'green', attrs = ['bold']))
 
             self._print_heading(heading_len = heading_len)
+
+            pprint(vars(self))
 
     def _finalize_stage3(self):
         heading_len = self._print_heading('Stage 3 Results')
@@ -550,5 +545,41 @@ class AutoTrainer:
         '''
 
         self._read_buffer()
+
+        for model in self.models:
+            if self.buffer['best_stage1_model'] == model['model_class_name']:
+                break
+        
+        init_params = deepcopy(model['init'])
+        for key in self.buffer['best_stage2_config']:
+            init_params.pop(key)
+        
+        nn_model = model['model_class'](**init_params, **self.buffer['best_stage2_config'])
+
+        reloaded_model = self.trainer_module.load_from_checkpoint(self.buffer['best_stage3_path'], model = nn_model)
+        reloaded_nn_model = reloaded_model.model
+        reloaded_nn_model.eval()
+
+        for batch in self.datamodule:
+            break
+
+        sample_inputs = batch[:-1]
+        
+        torch.onnx.export(
+            reloaded_nn_model,
+            sample_inputs,
+            'model.onnx',
+            export_params = True,
+            opset_version = 10,
+            do_constant_folding = True,
+            input_names = ['input'],
+            output_names = ['output'],
+            dynamic_axes = {
+                'input': {0 : 'batch_size'},
+                'output': {0 : 'batch_size'}
+            },
+        )
+        
+
 
         
