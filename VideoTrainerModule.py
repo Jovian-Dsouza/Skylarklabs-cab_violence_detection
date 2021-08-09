@@ -87,6 +87,7 @@ class ViolenceDetectionModule(TrainerModule):
         print('Freezing layers')
         
     def on_epoch_start(self):
+        # pass
         # unfreezing params from pretrained_block at 5th epoch
         if self.trainer.current_epoch == 5:
             for name, param in self.model.pretrained_block.named_parameters():
