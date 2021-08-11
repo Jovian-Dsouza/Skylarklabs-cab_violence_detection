@@ -26,9 +26,9 @@ def make_layer(inplanes, block, conv_builder, planes, blocks, stride=1):
 
     return nn.Sequential(*layers)
 
-class R2Plus1D_18_with_Conv3DNoTemporal(LightningModule):
+class R3D_18_with_Conv3DNoTemporal(LightningModule):
     """
-    Pretrained r2plus1d-18 with Conv3DNoTemporal
+    Pretrained r3d-18 with Conv3DNoTemporal
 
     Hyperparameters: 
     num_classes - number of output classes
@@ -38,7 +38,7 @@ class R2Plus1D_18_with_Conv3DNoTemporal(LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.pretrained_block = video_models.r2plus1d_18(pretrained=True)
+        self.pretrained_block = video_models.r3d_18(pretrained=True)
         self.pretrained_block = nn.Sequential(OrderedDict([
                             ("stem", self.pretrained_block.stem),
                             ("layer1", self.pretrained_block.layer1)
@@ -55,8 +55,8 @@ class R2Plus1D_18_with_Conv3DNoTemporal(LightningModule):
             nn.ReLU(inplace=True)
         )
 
-        self.layer1 = make_layer(128, BasicBlock, Conv3DNoTemporal, 256, 2, stride=2) 
-        self.layer2 = make_layer(256, BasicBlock, Conv3DNoTemporal, 512, 1, stride=2)
+        self.layer1 = make_layer(128, BasicBlock, Conv3DNoTemporal, 256, 4, stride=2) 
+        self.layer2 = make_layer(256, BasicBlock, Conv3DNoTemporal, 512, 2, stride=2)
         self.dropout = nn.Dropout(0.3)
         
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1)) 
@@ -78,5 +78,5 @@ class R2Plus1D_18_with_Conv3DNoTemporal(LightningModule):
 if __name__ == '__main__':
     from torchsummary import summary
 
-    video_model = R2Plus1D_18_with_Conv3DNoTemporal(num_classes=2)
+    video_model = R3D_18_with_Conv3DNoTemporal(num_classes=2)
     summary(video_model.cpu(), (3, 32, 128, 128), device='cpu')
