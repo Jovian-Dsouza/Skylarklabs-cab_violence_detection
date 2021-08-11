@@ -14,10 +14,15 @@ from skylark_autotrainer.modules import SoftmaxCategoricalClassificationModule
 import wandb
 
 from DataModule import VideoDataModule
-import models.model1 as model1
-import models.model2 as model2
 from VideoTrainerModule import *
 from callbacks import *
+
+from models.R2Plus1D_18_with_Conv2Plus1D import R2Plus1D_18_with_Conv2Plus1D
+from models.R2Plus1D_18_with_Conv3DNoTemporal import R2Plus1D_18_with_Conv3DNoTemporal
+from models.MC3_18_with_Conv2Plus1D import MC3_18_with_Conv2Plus1D
+from models.MC3_18_with_Conv3DNoTemporal import MC3_18_with_Conv3DNoTemporal
+from models.R3D_18_with_Conv2Plus1D import R3D_18_with_Conv2Plus1D
+from models.R3D_18_with_Conv3DNoTemporal import R3D_18_with_Conv3DNoTemporal
 
 """## Training configuration"""
 
@@ -31,23 +36,58 @@ class SplitDataModule():
 
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
-                                 batch_size=16,
+                                 batch_size=8,
                                 #  num_workers=0,  
                                  pin_memory=True)
 print(datamodule)
-split_data = SplitDataModule((812, 197, 58), batch_size = 16)
+split_data = SplitDataModule((812, 197, 58), batch_size = 8)
 
 autotrainer = AutoTrainer(
-    project_name = 'cab_violence_detection-Test',
+    project_name = 'cab_violence_detection-Test1',
     trainer_module = ViolenceDetectionModule,
     datamodule = datamodule,
     models = [
         {
-            'model': model1.VideoModel,
+            'model': R2Plus1D_18_with_Conv2Plus1D,
             'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
-            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 4e-4],
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
                                 'optimizer': ['adam']},
             'description': 'Pretrained r2plus1d-18 with Conv2Plus1D',
+        },
+        {
+            'model': R2Plus1D_18_with_Conv3DNoTemporal,
+            'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
+                                'optimizer': ['adam']},
+            'description': 'Pretrained r2plus1d-18 with Conv3DNoTemporal',
+        },
+        {
+            'model': MC3_18_with_Conv2Plus1D,
+            'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
+                                'optimizer': ['adam']},
+            'description': 'Pretrained mc3-18 with Conv2Plus1D',
+        },
+        {
+            'model': MC3_18_with_Conv3DNoTemporal,
+            'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
+                                'optimizer': ['adam']},
+            'description': 'Pretrained mc3-18 with Conv3DNoTemporal',
+        },
+        {
+            'model': R3D_18_with_Conv2Plus1D,
+            'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
+                                'optimizer': ['adam']},
+            'description': 'Pretrained r3d-18 with Conv2Plus1D',
+        },
+        {
+            'model': R3D_18_with_Conv3DNoTemporal,
+            'init': {'num_classes': 2, 'lr': 8e-3, 'optimizer': 'adamax'},
+            'hyperparameters': {'method': 'grid', 'lr': [1e-3, 2e-4, 3e-4],
+                                'optimizer': ['adam']},
+            'description': 'Pretrained r3d-18 with Conv3DNoTemporal',
         },
     ],
     checkpoint = {'filename': '{epoch}-{val_acc:.4f}', 'monitor': 'val_f1', 'mode': 'max'},
@@ -62,8 +102,8 @@ autotrainer = AutoTrainer(
     stages = {
         'stage1': {
                     'precision': 16, 
-                    'datasets_limits': split_data.cal(0.8, 1.0, 1.0),
-                    'max_epochs': 1,
+                    'datasets_limits': split_data.cal(0.5, 1.0, 1.0),
+                    'max_epochs': 10,
                     },
         'stage2': {
                     'precision': 16,
@@ -71,7 +111,7 @@ autotrainer = AutoTrainer(
                     'max_epochs': 15,
                   },
         'stage3': {
-                    'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=2, mode="min")], 
+                    'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=1, mode="min")], 
                     'max_epochs': 80,
                 },
     },
