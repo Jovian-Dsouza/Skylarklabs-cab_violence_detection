@@ -23,7 +23,7 @@ class UnfreezingOnPlateau(EarlyStopping):
             for name, param in pl_module.model.pretrained_block.named_parameters():
                 param.requires_grad_()
                 # print(f'Unfreezing {name}')
-            print('Unfreezing pretrained layers')
+            print('\nUnfreezing pretrained layers\n')
 
         if reason and self.verbose:
             self._log_info(trainer, reason)
