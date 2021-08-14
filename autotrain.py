@@ -23,6 +23,7 @@ from models.MC3_18_with_Conv2Plus1D import MC3_18_with_Conv2Plus1D
 from models.MC3_18_with_Conv3DNoTemporal import MC3_18_with_Conv3DNoTemporal
 from models.R3D_18_with_Conv2Plus1D import R3D_18_with_Conv2Plus1D
 from models.R3D_18_with_Conv3DNoTemporal import R3D_18_with_Conv3DNoTemporal
+from models.R2Plus1D_18_full import R2Plus1D_18_full
 
 """## Training configuration"""
 
@@ -42,7 +43,7 @@ print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 8)
 
 autotrainer = AutoTrainer(
-    project_name = 'cab_violence_detection-Test2',
+    project_name = 'cab_violence_detection-Test3',
     trainer_module = ViolenceDetectionModule,
     datamodule = datamodule,
     models = [
@@ -62,8 +63,8 @@ autotrainer = AutoTrainer(
     precision = 16,
     datasets_limits = (1, 1, 1),
     max_epochs = 1,
-    overfit_batches = 1,
-    overfit_epochs = 1,
+    # overfit_batches = 1,
+    # overfit_epochs = 1,
 
     stages = {
         'stage1': {
@@ -78,6 +79,7 @@ autotrainer = AutoTrainer(
                   },
         'stage3': {
                     # 'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=1, mode="min")], 
+                    'callbacks':[Unfreezing(epoch=5)],
                     'precision': 32,
                     'datasets_limits': split_data.cal(1.0, 1.0, 1.0),
                     'max_epochs': 40,
