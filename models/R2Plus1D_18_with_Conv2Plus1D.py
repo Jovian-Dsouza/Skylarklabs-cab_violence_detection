@@ -57,7 +57,7 @@ class R2Plus1D_18_with_Conv2Plus1D(LightningModule):
 
         self.layer1 = make_layer(128, BasicBlock, Conv2Plus1D, 256, 2, stride=2) 
         self.layer2 = make_layer(256, BasicBlock, Conv2Plus1D, 256, 1, stride=2)
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.4)
         
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1)) 
         self.flatten = nn.Flatten()
