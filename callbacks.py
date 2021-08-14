@@ -1,4 +1,6 @@
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks import Callback
+
 
 class UnfreezingOnPlateau(EarlyStopping):
     def on_validation_end(self, trainer, pl_module):
@@ -27,3 +29,24 @@ class UnfreezingOnPlateau(EarlyStopping):
 
         if reason and self.verbose:
             self._log_info(trainer, reason)
+
+class Unfreezing(Callback):
+    def __init__(self, epoch=5):
+        super(Unfreezing, self).__init__()
+        self.unfreeze_epoch = epoch
+
+    # def on_train_start(self):
+    #     # freezing params from pretrained_block
+    #     for name, param in self.model.pretrained_block.named_parameters():
+    #         param.requires_grad = False
+    #         # print(f'Freezing {name}')
+    #     print('Freezing Pretrained layers')
+        
+    def on_epoch_start(self):
+        # pass
+        # unfreezing params from pretrained_block at 5th epoch
+        if self.trainer.current_epoch == self.unfreeze_epoch:
+            for name, param in self.model.pretrained_block.named_parameters():
+                param.requires_grad_()
+                # print(f'Unfreezing {name}')
+            print('\nUnfreezing layers\n')
