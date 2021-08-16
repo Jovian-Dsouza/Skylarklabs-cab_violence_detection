@@ -42,11 +42,11 @@ class Unfreezing(Callback):
     #         # print(f'Freezing {name}')
     #     print('Freezing Pretrained layers')
         
-    def on_epoch_start(self):
+    def on_epoch_start(self, trainer, pl_module):
         # pass
         # unfreezing params from pretrained_block at 5th epoch
-        if self.trainer.current_epoch == self.unfreeze_epoch:
-            for name, param in self.model.pretrained_block.named_parameters():
+        if trainer.current_epoch == self.unfreeze_epoch:
+            for name, param in pl_module.model.pretrained_block.named_parameters():
                 param.requires_grad_()
                 # print(f'Unfreezing {name}')
             print('\nUnfreezing layers\n')
