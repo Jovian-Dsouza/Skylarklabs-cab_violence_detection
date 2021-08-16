@@ -23,6 +23,8 @@ from torchvision.transforms import (
     RandomVerticalFlip
 )
 
+from custom_transforms import ShakyResize, ShakyRotate 
+
 def get_count(paths, category):
     count = 0 
     for path in paths:
@@ -81,7 +83,7 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
         mean = [0.43216, 0.394666, 0.37645]
         std = [0.22803, 0.22145, 0.216989]
         crop = 128
-        pad = 10
+        pad = 16
 
         self.transform_dict = {
             'train' : Compose(
@@ -91,7 +93,8 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
                         transform=Compose(
                             [   
                                 Resize((crop+pad, crop+pad)),
-                                RandomCrop((crop, crop)),
+                                ShakyRotate(degrees=1.5, p=0.5),
+                                ShakyResize(crop, crop, p=0.5),
                                 Lambda(lambda x: x / 255.0),
                                 Normalize(mean, std),
                                 RandomHorizontalFlip(p=0.5),
