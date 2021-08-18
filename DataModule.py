@@ -189,6 +189,39 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
             pin_memory = self._PIN_MEMORY
         )
 
+    def cal_batches(self, train, val, test):
+        '''
+        Calculates number of batches from the given dataset percentage
+
+        Args: train : [0.0, 1.0] (float)
+              val : [0.0, 1.0] (float)
+              test : [0.0, 1.0] (float)
+
+        Returns: Number of batches for each dataset
+                (num_batches_train, num_batches_val, num_batches_test)
+        '''
+        train_len = len(glob(os.path.join(self._DATA_PATH, 'train', '*', '*')))
+        val_len = len(glob(os.path.join(self._DATA_PATH, 'val', '*', '*')))
+        test_len = len(glob(os.path.join(self._DATA_PATH, 'test', '*', '*')))
+
+        num_batches_train = round((train_len // self._BATCH_SIZE) * train)
+        num_batches_val = round((val_len // self._BATCH_SIZE) * val)
+        num_batches_test = round((test_len // self._BATCH_SIZE) * test)
+
+        # Make sure that num_batches is never 0
+        if num_batches_train == 0:
+            num_batches_train = 1
+            print("WARNING: num_batches_train is 0 setting to 1")
+        if num_batches_val == 0:
+            num_batches_val = 1
+            print("WARNING: num_batches_val is 0 setting to 1")
+        if num_batches_test == 0:
+            num_batches_test = 1
+            print("WARNING: num_batches_test is 0 setting to 1")
+
+        return (num_batches_train, num_batches_val, num_batches_test)
+
+
     def __repr__(self):
         train_paths = glob(os.path.join(self._DATA_PATH, 'train', '*', '*'))
         val_paths = glob(os.path.join(self._DATA_PATH, 'val', '*', '*'))

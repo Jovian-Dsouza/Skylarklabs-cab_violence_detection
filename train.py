@@ -14,20 +14,11 @@ from models.R2Plus1D_18_full import R2Plus1D_18_full
 
 """## Training configuration"""
 
-class SplitDataModule():
-    def __init__(self, data_splits, batch_size):
-      self.n = [data_split//batch_size for data_split in data_splits]
-
-    def cal(self, train, val, test):
-      return int(self.n[0] * train), int(self.n[1] * val), int(self.n[2] * test)
-
-
 datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
                                  clip_duration=3.2, # 32 frames at 10 fps
                                  batch_size=8,
                                  pin_memory=True)
 print(datamodule)
-split_data = SplitDataModule((812, 197, 58), batch_size = 8)
 
 AutoTrainer(
     project_name = 'cab_violence_detection-Test5',
@@ -52,23 +43,24 @@ AutoTrainer(
     max_epochs = 1,
     # overfit_batches = 1,
     # overfit_epochs = 1,
+    # wandb_logging = False
 
     stages = {
         'stage1': {
                     # 'precision': 16, 
-                    # 'datasets_limits': split_data.cal(0.5, 1.0, 1.0),
+                    # 'datasets_limits': datamodule.cal_batches(0.5, 1.0, 1.0),
                     # 'max_epochs': 10,
                     },
         'stage2': {
                     # 'precision': 16,
-                    # 'datasets_limits': split_data.cal(0.5, 0.8, 1.0),
+                    # 'datasets_limits': datamodule.cal_batches(0.5, 0.8, 1.0),
                     # 'max_epochs': 15,
                   },
         'stage3': {
                     # 'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=2, mode="min")], 
                     'callbacks':[Unfreezing(epoch=5)],
                     'precision': 32,
-                    'datasets_limits': split_data.cal(1.0, 1.0, 1.0),
+                    'datasets_limits': datamodule.cal_batches(1.0, 1.0, 1.0),
                     'max_epochs': 80,
                 },
     },
