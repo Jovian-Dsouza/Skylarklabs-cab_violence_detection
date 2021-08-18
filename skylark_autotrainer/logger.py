@@ -14,7 +14,7 @@ class CustomWandbLogger(WandbLogger):
         model_version: str,
         sweep: bool = False,
     ):
-        run_id = str(hash(f'{project_name}-{model_name}-{model_stage}-{model_version}')) if model_stage != 4 else None
+        run_id = str(hash(f'{project_name}{model_name}{model_stage}{model_version}')) if model_stage != 4 else None
         if run_id:
             run_id.replace('-', '')
             
@@ -31,19 +31,24 @@ class CustomWandbLogger(WandbLogger):
     
     def set_model(self, model: LightningModule):
         self.watch(model)
-        self.model = model
+        # self.model = model
 
     @rank_zero_only
     def log_metrics(self, metrics, step = None) -> None:
         metrics.pop('epoch')
+
         for metric_name in metrics:
             if 'stage' not in metric_name:
-                if 'train' in metric_name:
-                    metrics[f'stage({self.model_stage})/training/{metric_name}'] = metrics.pop(metric_name)
-                elif 'val' in metric_name:
-                    metrics[f'stage({self.model_stage})/validation/{metric_name}'] = metrics.pop(metric_name)
-                elif 'test' in metric_name:
-                    metrics[f'stage({self.model_stage})/testing/{metric_name}'] = metrics.pop(metric_name)
+                metric_value = metrics.pop(metric_name)
+                if 'train_' in metric_name:
+                    metric_name = metric_name.replace('train_', 'training/')
+                elif 'val_' in metric_name:
+                    metric_name = metric_name.replace('val_', 'validation/')
+                elif 'test_' in metric_name:
+                    metric_name = metric_name.replace('test_', 'testing/')
+
+                metrics[f'stage({self.model_stage})/{metric_name}'] = metric_value
+
         self.experiment.log(metrics)
     
     @property
@@ -53,5 +58,9 @@ class CustomWandbLogger(WandbLogger):
             if self._offline:
                 os.environ['WANDB_MODE'] = 'dryrun'
             self._experiment = wandb.init(**self._wandb_init) if wandb.run is None else wandb.run
+        
+        # if getattr(self._experiment, "define_metric", None):
+        #     self._experiment.define_metric("batch_step", hidden = True)
+        #     self._experiment.define_metric("*", step_metric = "batch_step", step_sync = True)
 
         return self._experiment

@@ -33,7 +33,7 @@ class TrainerModule(LightningModule):
     def log_metrics(self, metric_dict):
         metric_name = list(metric_dict.keys())[0]
         assert 'train' in metric_name or 'val' in metric_name or 'test' in metric_name, f'\n\nOne of `train` or `valid` or `test` prefix must be present the metric name, but got "{metric_name}".\n'
-
+        
         self.log_dict(
             metric_dict,
             on_epoch = True,

@@ -2,8 +2,6 @@ from pytorch_lightning.callbacks.base import Callback
 import torch
 from pytorch_lightning import Trainer, LightningModule, LightningDataModule
 from pytorch_lightning import seed_everything
-from torch.utils import data
-from torch.utils.data.dataloader import DataLoader
 
 from .logger import CustomWandbLogger
 from .callbacks import ArtifactModelCheckpoint
@@ -11,10 +9,20 @@ from .callbacks import ArtifactModelCheckpoint
 import os
 import dill
 import wandb
-from copy import deepcopy, copy
+from copy import deepcopy
 from typing import Dict, List, Tuple, Union
 from termcolor import colored
-from pprint import pprint
+
+import argparse
+
+parser = argparse.ArgumentParser(description = 'Skylark Autotraining Pipeline for auto training and producing production ready model.')
+parser.add_argument('--stage', type = int, default = 0, help = 'Stage value')
+parser.add_argument('--deploy', action = 'store_true', help = 'Deploy project to production')
+parser.add_argument('--restart', action = 'store_true', help = 'Restart auto training')
+parser.add_argument('--opset', type = int, default = 12, help = 'ONNX Opset Version')
+args = parser.parse_args()
+
+# assert not(args.stage == 0 and not args.deploy), f'\n\nYou must pass either --stage or --deploy, found both None.\n'
 
 class AutoTrainer:
     def __init__(
@@ -34,7 +42,8 @@ class AutoTrainer:
         seed: int = 0,
         min_epochs: int = 1,
         wandb_logging: bool = True,
-        restart: bool = False,
+        overfit_batches: int = 10,
+        overfit_epochs: int = 10,
         **kwargs
     ) -> None:
 
@@ -57,11 +66,12 @@ class AutoTrainer:
         self.min_epochs = min_epochs
         self.precision = precision
         self.callbacks = callbacks
+        self.overfit_batches = overfit_batches
+        self.overfit_epochs = overfit_epochs
         self.wandb_logging = wandb_logging
         self.kwargs = kwargs
 
-        if restart and os.path.isfile(self.path):
-            os.remove(self.path)
+        self.restart = args.restart
         
         for model in models:
             model['model_class'] = model.pop('model')
@@ -70,13 +80,21 @@ class AutoTrainer:
         self.models = models
         self.checkpoint = checkpoint
         self.evaluation_metric = evaluation_metric
+
+        self._first_init = True
+
+        self._start()
     
     def _read_buffer(self):
-        if os.path.isfile(self.path):
+        if self._first_init:
+            if not self.restart and os.path.isfile(self.path):
+                self.buffer = torch.load(self.path)
+            else:
+                self.buffer = {}
+                self.buffer['last_stage'] = 0
+            self._first_init = False
+        elif os.path.isfile(self.path):
             self.buffer = torch.load(self.path)
-        else:
-            self.buffer = {}
-            self.buffer['last_stage'] = 0
     
     def _get_stage_variables(self, stage):
         if self.stages:
@@ -87,8 +105,14 @@ class AutoTrainer:
                 precision = self.stages[stage]['precision'] if 'precision' in self.stages[stage] else self.precision
                 gpus = self.stages[stage]['gpus'] if 'gpus' in self.stages[stage] else self.gpus
                 callbacks = self.stages[stage]['callbacks'] if 'callbacks' in self.stages[stage] else self.callbacks
-                
-        else:            
+            else:
+                datasets_limits = self.datasets_limits
+                max_epochs = self.max_epochs
+                min_epochs = self.min_epochs
+                precision = self.precision
+                gpus = self.gpus
+                callbacks = self.callbacks
+        else:
             datasets_limits = self.datasets_limits
             max_epochs = self.max_epochs
             min_epochs = self.min_epochs
@@ -194,7 +218,7 @@ class AutoTrainer:
 
                 self._print_heading('Performing Dev Run Test', idx = 1)
                 dev_trainer = Trainer(
-                    gpus =gpus,
+                    gpus = gpus,
                     logger = False,
                     fast_dev_run = True,
                     weights_summary = None,
@@ -205,8 +229,8 @@ class AutoTrainer:
                 self._print_heading('Performing Overfitting Test', idx = 1)
                 overfit_trainer = Trainer(
                     gpus = gpus,
-                    max_epochs = 10,
-                    overfit_batches = 5,
+                    max_epochs = self.overfit_epochs,
+                    overfit_batches = self.overfit_batches,
                     logger = False,
                     precision = precision,
                     checkpoint_callback = False,
@@ -292,10 +316,13 @@ class AutoTrainer:
     def _initiate_stage2(self):
         self._read_buffer()
 
+        assert self.buffer['last_stage'] >= 1, f'\n\nFor stage 2 your model must have completed stage 1.\n'
+
         if self.buffer['last_stage'] < 2 or not self.buffer['best_stage2_config']:
+            assert self.wandb_logging, f'\n\n`wandb_logging` must be True for performing stage 2.\n'
+
             datasets_limits, max_epochs, min_epochs, precision, gpus, callbacks = self._get_stage_variables('stage2')
             assert len(datasets_limits) == 3, f'\n\nYou must provide 3 dataset limits.\n'
-
 
             for model in self.models:
                 if self.buffer['best_stage1_model'] == model['model_class_name']:
@@ -303,6 +330,8 @@ class AutoTrainer:
 
             self._print_heading(f'Initializing Stage 2 for {model["model_class_name"]}')
             
+            assert 'hyperparameters' in model, f'\n\nYou must provide `hyperparameters` config values in your model key.\n'
+
             sweep_method = model['hyperparameters'].pop('method')
             init_params = deepcopy(model['init'])
             for key in model['hyperparameters']:
@@ -319,7 +348,7 @@ class AutoTrainer:
             sweep_config = {
                 'name': 'hyperparameter-optimization',
                 'method': sweep_method,
-                'metric': {'name': f"stage(2)/testing/{self.evaluation_metric['monitor']}", 'goal': self.evaluation_metric['mode'] + 'imize'}
+                'metric': {'name': f"stage(2)/{self.evaluation_metric['monitor'].replace('test_', 'testing/')}", 'goal': self.evaluation_metric['mode'] + 'imize'}
             }
             parameters_dict = {}
             for key, value in model['hyperparameters'].items():
@@ -400,6 +429,7 @@ class AutoTrainer:
                 del reloaded_model
             
             wandb.agent(sweep_id, _sweep_train_function)
+            wandb.finish()
             
             self._finalize_stage2()
         else:
@@ -436,6 +466,8 @@ class AutoTrainer:
     def _initiate_stage3(self) -> None:
         self._read_buffer()
 
+        assert self.buffer['last_stage'] >= 2, f'\n\nFor stage 3 your model must have completed stage 2 and stage 1.\n'
+
         if self.buffer['last_stage'] < 3:
             datasets_limits, max_epochs, min_epochs, precision, gpus, callbacks = self._get_stage_variables('stage3')
             assert len(datasets_limits) == 3, f'\n\nYou must provide 3 dataset limits.\n'
@@ -457,7 +489,7 @@ class AutoTrainer:
             
             nn_model = model['model_class'](**init_params, **self.buffer['best_stage2_config'])
             model_name = model['model_class_name']
-            
+
             self._print_heading(f'Initializing Stage 3 for {model_name}')
 
             checkpoint_callback = ArtifactModelCheckpoint(
@@ -476,8 +508,6 @@ class AutoTrainer:
                 wandb_logging = self.wandb_logging
             )
 
-            self._print_heading('Starting Training', idx = 1)
-
             wandb_logger = CustomWandbLogger(
                 project_name = self.project_name,
                 model_name = model_name,
@@ -487,6 +517,8 @@ class AutoTrainer:
             
             if wandb_logger:
                 wandb_logger.set_model(nn_model)
+
+            self._print_heading('Starting Training', idx = 1)
                 
             lightning_trainer = Trainer(
                 gpus = gpus,
@@ -505,9 +537,11 @@ class AutoTrainer:
                 
                 **self.kwargs,
             )
-            
+
             lightning_module = self.trainer_module.load_from_checkpoint(self.buffer['best_stage2_model_path'], model = nn_model)
             lightning_trainer.fit(lightning_module, self.datamodule)
+
+            self.sample_input_shape = lightning_module.sample_train_batch[0].shape
 
             self.best_stage3_path = checkpoint_callback.best_model_path
             self.best_stage3_val_score = {checkpoint_callback.monitor: checkpoint_callback.best_model_score.item()}
@@ -532,8 +566,6 @@ class AutoTrainer:
 
             self._print_heading(heading_len = heading_len)
 
-            pprint(vars(self))
-
     def _finalize_stage3(self):
         heading_len = self._print_heading('Stage 3 Results')
         print()
@@ -544,17 +576,33 @@ class AutoTrainer:
         
         self._save_buffer(last_stage = 3)
     
-    def start(self):
+    def _start(self):
         '''
         Starts the autotraining with the provided configurations
 
         Returns -> None
         '''
-        self._initiate_stage1()
-        self._initiate_stage2()
-        self._initiate_stage3()
+        
+        if args.stage == 1:
+            self._initiate_stage1()
+        
+        elif args.stage == 2:
+            self._initiate_stage2()
+        
+        elif args.stage == 3:
+            self._initiate_stage3()
+        
+        elif args.deploy:
+            self._initiate_stage1()
+            self._initiate_stage2()
+            self._initiate_stage3()
+            self._deploy(args.opset)
     
-    def deploy(self):
+        # autotrainer._initiate_stage1()
+        # autotrainer._initiate_stage2()
+        # autotrainer._initiate_stage3()
+    
+    def _deploy(self, opset_version: int = 10):
         '''
         Deploys the model into production with ONNX runtime
 
@@ -562,6 +610,8 @@ class AutoTrainer:
         '''
 
         self._read_buffer()
+
+        assert self.buffer['last_stage'] == 3, f'\n\nFor deployment your model must be in stage 3, but found stage {self.buffer["last_stage"]}.\n'
 
         for model in self.models:
             if self.buffer['best_stage1_model'] == model['model_class_name']:
@@ -577,17 +627,18 @@ class AutoTrainer:
         reloaded_nn_model = reloaded_model.model
         reloaded_nn_model.eval()
 
-        for batch in self.datamodule:
-            break
+        torch_path = os.path.join(self.project_name, f"{self.buffer['best_stage1_model']}.pth")
+        torch.save(reloaded_nn_model.state_dict(), torch_path)
 
-        sample_inputs = batch[:-1]
+        sample_inputs = torch.ones(self.buffer['sample_input_shape'])
+        onnx_path = os.path.join(self.project_name, f"{self.buffer['best_stage1_model']}.onnx")
         
         torch.onnx.export(
             reloaded_nn_model,
             sample_inputs,
-            'model.onnx',
+            onnx_path,
             export_params = True,
-            opset_version = 10,
+            opset_version = opset_version,
             do_constant_folding = True,
             input_names = ['input'],
             output_names = ['output'],
@@ -596,7 +647,8 @@ class AutoTrainer:
                 'output': {0 : 'batch_size'}
             },
         )
-        
 
-
-        
+        wandb.finish()
+        wandb.init(project = self.project_name, name = 'Deploy', resume = True, id = str(f'{self.project_name}-{self.buffer["best_stage1_model"]}-deploy'))
+        wandb.save(torch_path)
+        wandb.save(onnx_path)

@@ -1,17 +1,4 @@
-import torch
-from torch import nn, optim
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, random_split
-from torchvision import datasets, transforms
-import torchmetrics
-
-from pytorch_lightning import LightningModule, LightningDataModule
-from pytorch_lightning.callbacks import Callback
-
-from skylark_autotrainer import AutoTrainer, TrainerModule
-from skylark_autotrainer.modules import SoftmaxCategoricalClassificationModule
-
-import wandb
+from skylark_autotrainer import AutoTrainer
 
 from DataModule import VideoDataModule
 from VideoTrainerModule import *
@@ -42,7 +29,7 @@ datamodule = VideoDataModule(data_path='/content/CAR_VIOLENCE_DATASET_final',
 print(datamodule)
 split_data = SplitDataModule((812, 197, 58), batch_size = 8)
 
-autotrainer = AutoTrainer(
+AutoTrainer(
     project_name = 'cab_violence_detection-Test5',
     trainer_module = ViolenceDetectionModule,
     datamodule = datamodule,
@@ -79,13 +66,11 @@ autotrainer = AutoTrainer(
                   },
         'stage3': {
                     # 'callbacks':[UnfreezingOnPlateau(monitor="train_loss", patience=2, mode="min")], 
-                    # 'callbacks':[Unfreezing(epoch=5)],
+                    'callbacks':[Unfreezing(epoch=5)],
                     'precision': 32,
                     'datasets_limits': split_data.cal(1.0, 1.0, 1.0),
                     'max_epochs': 80,
                 },
     },
-    restart = True, # restarting is supported now
 )
 
-autotrainer.start()
