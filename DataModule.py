@@ -14,6 +14,10 @@ from pytorchvideo.transforms import (
     UniformTemporalSubsample
 )
 
+from torchvision.transforms._transforms_video import (
+    CenterCropVideo,
+)
+
 from torchvision.transforms import (
     Compose,
     Lambda,
@@ -83,7 +87,8 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
         mean = [0.43216, 0.394666, 0.37645]
         std = [0.22803, 0.22145, 0.216989]
         crop = 128
-        pad = 16
+        pad = 20
+        num_frames = 32
 
         self.transform_dict = {
             'train' : Compose(
@@ -92,7 +97,8 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
                         key="video",
                         transform=Compose(
                             [   
-                                Resize((crop+pad, crop+pad)),
+                                UniformTemporalSubsample(num_frames),
+                                ShortSideScale(size=crop+pad),
                                 ShakyRotate(degrees=1.5, p=0.5),
                                 ShakyResize(crop, crop, p=0.5),
                                 Lambda(lambda x: x / 255.0),
@@ -110,7 +116,9 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
                         key="video",
                         transform=Compose(
                             [   
-                                Resize((crop, crop)),
+                                UniformTemporalSubsample(num_frames),
+                                ShortSideScale(size=crop),
+                                CenterCropVideo(crop_size=(crop, crop)),
                                 Lambda(lambda x: x / 255.0),
                                 Normalize(mean, std),
                             ]
@@ -124,7 +132,9 @@ class VideoDataModule(pytorch_lightning.LightningDataModule):
                         key="video",
                         transform=Compose(
                             [   
-                                Resize((crop, crop)),
+                                UniformTemporalSubsample(num_frames),
+                                ShortSideScale(size=crop),
+                                CenterCropVideo(crop_size=(crop, crop)),
                                 Lambda(lambda x: x / 255.0),
                                 Normalize(mean, std)         
                             ]
