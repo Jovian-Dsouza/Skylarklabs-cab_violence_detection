@@ -60,7 +60,7 @@ AutoTrainer(
     max_epochs = 1,
     # overfit_batches = 1,
     # overfit_epochs = 1,
-    wandb_logging = False,
+    # wandb_logging = False,
 
     stages = {
         'stage1': {
